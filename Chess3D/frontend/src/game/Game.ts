@@ -51,7 +51,7 @@ export class Game {
         this.renderer.toneMappingExposure = 3;
         this.renderer.outputColorSpace = SRGBColorSpace;
         this.renderer.shadowMap.enabled = true;
-        this.renderer.setClearColor(0x1a1a2e);
+        this.renderer.setClearColor(0x3a506b);
     }
 
     private addListenerOnResize(): void {

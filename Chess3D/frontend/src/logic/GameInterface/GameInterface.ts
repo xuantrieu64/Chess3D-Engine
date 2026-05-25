@@ -1,14 +1,16 @@
 import { PieceColor } from "@/objects/Pieces/Piece/types";
 import { PieceSet, PromotablePieces } from "../PiecesContainer/types";
-import { OnPromoteBtnClick } from "./types";
+import { GameOverInfo, OnPromoteBtnClick } from "./types";
 import { BLACK_ICONS, WHITE_ICONS } from "@/contants/piece-icon";
 
+
 export class GameInterface {
-    private whiteScoreElementId = "white-score";
-    private blackScoreElementId = "black-score";
-    private opponentTurnNotificationElementId = "opponent-turn-notification";
-    private promotionElementId = "promotion-element-id";
-    private promotable: PromotablePieces[] = ["q", "r", "b", "n"];
+    private readonly whiteScoreElementId = "white-score";
+    private readonly blackScoreElementId = "black-score";
+    private readonly opponentTurnNotificationElementId = "opponent-turn-notification";
+    private readonly promotionElementId = "promotion-element-id";
+    private readonly gameOverElementId = "game-over-element-id";
+    private readonly promotable: PromotablePieces[] = ["q", "r", "b", "n"];
 
     private createScoreElement(id: string, isPlayerScore: boolean): void {
         this.getOrCreate(id, (div) => {
@@ -175,6 +177,67 @@ export class GameInterface {
         if (el) el.style.display = "none";
     }
 
+    showGameOver(info: GameOverInfo): void {
+        // Idempotent – remove previous overlay if it somehow exists
+        document.getElementById(this.gameOverElementId)?.remove();
+ 
+        const overlay = document.createElement("div");
+        overlay.id = this.gameOverElementId;
+        overlay.style.cssText = [
+            "position:fixed", "top:0", "left:0",
+            "width:100vw", "height:100vh",
+            "display:flex", "align-items:center", "justify-content:center",
+            "background:rgba(0,0,0,0.72)",
+            "z-index:500",
+            "animation:fadeIn 0.35s ease",
+        ].join(";");
+ 
+        // Inject keyframe once
+        if (!document.getElementById("chess-anim-style")) {
+            const style = document.createElement("style");
+            style.id = "chess-anim-style";
+            style.textContent = `@keyframes fadeIn{from{opacity:0}to{opacity:1}}`;
+            document.head.appendChild(style);
+        }
+ 
+        const box = document.createElement("div");
+        box.style.cssText = [
+            "background:linear-gradient(145deg,#1e2640,#2d3560)",
+            "border:1px solid rgba(255,255,255,0.12)",
+            "border-radius:20px",
+            "padding:48px 72px",
+            "text-align:center",
+            "color:white",
+            "box-shadow:0 24px 64px rgba(0,0,0,0.6)",
+        ].join(";");
+ 
+        const headline = document.createElement("h1");
+        headline.textContent = info.headline;
+        headline.style.cssText = "font-size:2.4rem;margin:0 0 12px;font-weight:700;";
+ 
+        const detail = document.createElement("p");
+        detail.textContent = info.detail;
+        detail.style.cssText = "font-size:1.1rem;color:#b0b8d0;margin:0 0 32px;";
+ 
+        const btn = document.createElement("button");
+        btn.textContent = "Chơi lại";
+        btn.style.cssText = [
+            "background:#4a7bd4", "color:white",
+            "border:none", "border-radius:10px",
+            "padding:12px 32px", "font-size:1.05rem",
+            "cursor:pointer", "transition:background 0.2s",
+        ].join(";");
+        btn.onmouseenter = () => { btn.style.background = "#5a8be4"; };
+        btn.onmouseleave = () => { btn.style.background = "#4a7bd4"; };
+        btn.onclick = () => window.location.reload();
+ 
+        box.appendChild(headline);
+        if (info.detail) box.appendChild(detail);
+        box.appendChild(btn);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    }
+
     init(playerColor: PieceColor): void {
         const isPlayWhiteColor = playerColor === "w";
 
@@ -188,5 +251,6 @@ export class GameInterface {
         document.getElementById(this.whiteScoreElementId)?.remove();
         document.getElementById(this.opponentTurnNotificationElementId)?.remove();
         document.getElementById(this.promotionElementId)?.remove();
+        document.getElementById(this.gameOverElementId)?.remove();;
     }
 }
