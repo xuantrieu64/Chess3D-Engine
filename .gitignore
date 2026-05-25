@@ -1,18 +1,107 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# =========================
+# Dependencies
+# =========================
+node_modules/
 
-# Other files and folders
-.settings/
+# Package manager
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# =========================
+# Build / Production
+# =========================
+dist/
+build/
+out/
+.next/
+coverage/
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# OS / Editor Files
+# =========================
+.DS_Store
+Thumbs.db
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Cache
+# =========================
+.cache/
+.parcel-cache/
+.eslintcache
+.tmp/
+.temp/
+
+# =========================
+# MongoDB
+# =========================
+data/
+mongodb-data/
+
+# =========================
+# Uploads / Generated Files
+# =========================
+uploads/
+public/uploads/
+
+# =========================
+# Testing
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+
+# =========================
+# PM2
+# =========================
+.pm2/
+
+# =========================
+# Runtime
+# =========================
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# Optional: Keep lock file
+# (Recommended for team projects)
+# Remove comment if needed
+# =========================
+# !package-lock.json
+# !yarn.lock
+# !pnpm-lock.yaml
