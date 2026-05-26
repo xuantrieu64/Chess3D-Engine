@@ -82,7 +82,11 @@ export class ChessGameEngine {
 
     private notifyAiToMove(playerMove: Move): void {
         this.gameInterface.enableOpponentTurnNotification();
-        this.worker.postMessage({ type: "aiMove", playerMove });
+        this.worker.postMessage({
+            type: "aiMove",
+            playerMove,
+            fen: this.chessGame.fen() // Add FEN as safety check
+        });
     }
 
     private performPlayerMove(droppedField: Object3D): MoveResult {
@@ -279,11 +283,24 @@ export class ChessGameEngine {
                 // Re-evaluate check state now that the real promoted piece is on the board
                 this.updateCheckHighlight();
 
-                this.notifyAiToMove(move);
+                // ✅ FIX: Send to AI AFTER promotion complete + FEN updated
+                // Pass the CURRENT FEN (not move) to avoid state mismatch
+                this.notifyAiAfterPlayerPromotion(move, promotedTo);
             });
             return true;
         }
         return this.promotePiece({ color, droppedField, piece, promotedPieceKey: "q" });
+    }
+
+    private notifyAiAfterPlayerPromotion(move: Move, promotedTo: PromotablePieces): void {
+        this.gameInterface.enableOpponentTurnNotification();
+
+        this.worker.postMessage({
+            type: "aiMoveAfterPromotion",
+            fen: this.chessGame.fen(),
+            promotedTo: promotedTo,
+            move: move
+        });
     }
 
     private isPlayerColor(color: PieceColor): boolean {
@@ -425,15 +442,15 @@ export class ChessGameEngine {
         }
 
         if (game.isStalemate()) {
-            return { headline: "Hòa cờ! 🤝", detail: "Stalemate — không còn nước đi hợp lệ" };
+            return { headline: "Thua cuộc", detail: "Không còn nước đi hợp lệ" };
         }
 
         if (game.isInsufficientMaterial()) {
             return { headline: "Hòa cờ! 🤝", detail: "Thiếu quân để chiếu hết" };
         }
-        if (game.isThreefoldRepetition()) {
-            return { headline: "Hòa cờ! 🤝", detail: "Lặp thế 3 lần" };
-        }
+        // if (game.isThreefoldRepetition()) {
+        //     return { headline: "Hòa cờ! 🤝", detail: "Lặp thế 3 lần" };
+        // }
         if (game.isDraw()) {
             return { headline: "Hòa cờ! 🤝", detail: "Quy tắc 50 nước không ăn" };
         }

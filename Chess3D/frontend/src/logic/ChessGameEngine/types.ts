@@ -47,13 +47,19 @@ export interface AiPerformedMoveWebWorkerEvent {
     type: "aiMovePerformed";
 }
 
+export interface AiMoveAfterPromotionWebWorkerEvent {
+    fen: string;
+    promotedTo: PromotablePieces;
+    move?: Move;
+    type: "aiMoveAfterPromotion";
+}
+
 export type WebWorkerEvent =
     | { data: InitWebWorkerEvent }
     | { data: AiMoveWebWorkerEvent }
     | { data: AiPerformedMoveWebWorkerEvent }
-    | {
-        data: PromotionWebWorkerEvent;
-    };
+    | {data: PromotionWebWorkerEvent;}
+    | { data: AiMoveAfterPromotionWebWorkerEvent };
 
 export interface PromotionResult {
     removedPieceId: number;

@@ -1,1 +1,219 @@
 @import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+@property --light-backgroud {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: -20%;
+}
+
+@property --angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+.container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+.shine-effect {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.shine-effect img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shine-effect::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: linear-gradient(45deg,
+      transparent calc(var(--light-backgroud) - 8%),
+      rgba(255, 255, 255, 0.9) var(--light-backgroud),
+      transparent calc(var(--light-backgroud) + 8%));
+
+  mix-blend-mode: overlay;
+
+  animation: shine 2.5s linear infinite;
+}
+
+
+.start-game {
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  transform: translateX(-50%);
+  padding: 24px 80px;
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 3px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  isolation: isolate;
+  overflow: hidden;
+  transition: 0.4s;
+  z-index: 10;
+}
+
+
+.start-game:hover {
+  box-shadow: 0 0 15px white, 0 0 25px cyan, 0 0 40px magenta;
+}
+
+
+.start-game::before {
+  content: "";
+  position: absolute;
+  inset: -120%;
+  background: conic-gradient(from var(--angle),
+      transparent 0deg, #00ffff 70deg, #ff00ff 140deg,
+      #00ff88 220deg, #00ffff 300deg, transparent 360deg);
+
+  animation: rotate-border 4s linear infinite;
+  filter: blur(20px);
+  z-index: -2;
+}
+
+.start-game::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: -1;
+}
+
+.figure {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.figure-man img {
+  position: absolute;
+  bottom: 10px;
+  left: 50px;
+}
+
+.figure-women img {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+}
+
+.text-info {
+  position: absolute;
+  top: 10px;
+  left: 15px;
+  z-index: 20;
+}
+
+/* text */
+
+.blink-text {
+  font-weight: bold;
+  color: white;
+  letter-spacing: 2px;
+}
+
+.blink-text span {
+  display: inline-block;
+  opacity: 0;
+  animation: blink .8s both;
+}
+
+@keyframes rotate-border {
+  from {
+    --angle: 0deg;
+  }
+
+  to {
+    --angle: 360deg;
+  }
+}
+
+@keyframes shine {
+  from {
+    --light-backgroud: -20%;
+  }
+
+  to {
+    --light-backgroud: 120%;
+  }
+}
+
+
+@keyframes blink {
+  0% {
+    opacity: 0
+  }
+
+  5% {
+    opacity: .4
+  }
+
+  10% {
+    opacity: 0
+  }
+
+  15% {
+    opacity: .55
+  }
+
+  20% {
+    opacity: .55
+  }
+
+  25% {
+    opacity: 0
+  }
+
+  30% {
+    opacity: .7
+  }
+
+  40% {
+    opacity: .7
+  }
+
+  45% {
+    opacity: 0
+  }
+
+  50% {
+    opacity: .85
+  }
+
+  65% {
+    opacity: .85
+  }
+
+  70% {
+    opacity: 0
+  }
+
+  75% {
+    opacity: 1
+  }
+
+  to {
+    opacity: 1
+  }
+}
