@@ -7,8 +7,8 @@ import { BLACK_COLOR_PIECE, WHITE_COLOR_PIECE } from "@/contants/colors";
 // import { convertCannonEsQuaternion } from "@/utils/general";
 
 export abstract class Piece extends BaseObject {
-    private initialMass = 0.1;
-    private size: Vec3 = new Vec3(0.35, 0.4, 0.35);
+    private readonly initialMass = 0.1;
+    private readonly size: Vec3 = new Vec3(0.35, 0.4, 0.35);
     private _color: PieceColor;
     private _chessPosition: PieceChessPosition;
 
@@ -39,9 +39,10 @@ export abstract class Piece extends BaseObject {
     }
 
     private createPhysicsBody(initialPosition: Vector3): void {
+        const halfHeight = this.size.y / 2;
         const bodyPosition = new Vec3(
             initialPosition.x,
-            initialPosition.y + this.size.y,   // center of box = surface + half-height
+            initialPosition.y + halfHeight,
             initialPosition.z
         );
 

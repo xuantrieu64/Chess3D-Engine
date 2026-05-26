@@ -1,22 +1,26 @@
 import { Id } from "@/global/types";
 import { BaseGroup } from "../BaseGroup/BaseGroup";
 import { ChessBase } from "../ChessBase/ChessBase";
-// import { DroppableField } from "./types";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { Color, FrontSide, Mesh, MeshPhongMaterial, Object3D, PlaneGeometry } from "three";
+import { BufferGeometry, CircleGeometry, Color, FrontSide, Material, Mesh, MeshBasicMaterial, MeshPhongMaterial, Object3D, PlaneGeometry } from "three";
 import { BLACK_COLOR_FIELD, WHITE_COLOR_FIELD } from "@/contants/colors";
 import { Body, Box, Vec3 } from "cannon-es";
-// import { centerMiddle, convertCannonEsQuaternion, convertCannonEsVector, convertThreeVector } from "@/utils/general";
+import { FieldHighlightType, HIGHLIGHT_STYLES } from "./types";
+import { HIGHLIGHT_Y_OFFSET } from "@/contants/highlight";
 
 
 export const FIELD_NAME = "Field";
 
+
 export class ChessBoard extends BaseGroup {
-    private size = 8;
+    private readonly size = 8;
     private chessBase: ChessBase;
     private loader: GLTFLoader;
 
     private boardMatrix: Array<Id[]> = [];
+
+    private selectionOverlays: Map<string, Mesh> = new Map();
+    private stateOverlays: Map<string, Mesh> = new Map();
 
     constructor(name: string, loader: GLTFLoader) {
         super(name);
@@ -59,7 +63,7 @@ export class ChessBoard extends BaseGroup {
         }
     }
 
-    private createPsychicsBody() {
+    private createPhysicsBody() {
         this.body = new Body({
             mass: 0,
             shape: new Box(new Vec3(4, 0.05, 4)),
@@ -77,6 +81,56 @@ export class ChessBoard extends BaseGroup {
         });
     }
 
+    private static overlayKey(row: number, column: number): string {
+        return `${row}_${column}`;
+    }
+
+    private createHighlightMesh(type: FieldHighlightType): Mesh {
+        const { color, opacity, useCircle } = HIGHLIGHT_STYLES[type];
+
+        const geometry: BufferGeometry = useCircle ? new CircleGeometry(0.19, 20) : new PlaneGeometry(0.94, 0.94);
+        const material = new MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity,
+            depthWrite: false
+        });
+
+        const mesh = new Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+
+        return mesh;
+    }
+
+    private addOverlay(
+        row: number,
+        column: number,
+        type: FieldHighlightType,
+        overlapMap: Map<string, Mesh>
+    ): void {
+        const key = ChessBoard.overlayKey(row, column);
+        this.removeFromMap(key, overlapMap);
+
+        const mesh = this.createHighlightMesh(type);
+        mesh.position.set(column - 3.5, HIGHLIGHT_Y_OFFSET, row - 3.5);
+        this.add(mesh)
+        overlapMap.set(key, mesh);
+    }
+
+    private removeFromMap(key: string, map: Map<string, Mesh>): void {
+        const existing = map.get(key);
+        if (!existing) return;
+        this.remove(existing);
+        existing.geometry.dispose();
+        (existing.material as Material).dispose();
+        map.delete(key);
+    }
+
+    private clearMap(map: Map<string, Mesh>): void {
+        map.forEach((_, key) => this.removeFromMap(key, map));
+        map.clear();
+    }
+
 
     getFieldId(row: number, column: number): number {
         if (!this.boardMatrix[row]) return -1;
@@ -91,8 +145,7 @@ export class ChessBoard extends BaseGroup {
 
     markPlaneAsDroppable(row: number, column: number): void {
         const plane = this.getField(row, column) as Mesh | undefined;
-        if (!plane) return;
-        plane.userData.droppable = true;
+        if (plane) plane.userData.droppable = true;
         // Visual highlight can be added here
     }
 
@@ -107,9 +160,41 @@ export class ChessBoard extends BaseGroup {
         }
     }
 
+    /**
+    * Highlight a board field with the given visual type.
+    *
+    * 'check' type uses a separate persistent overlay map so it survives
+    * across piece selection / deselection cycles.
+    */
+    highlightField(row: number, column: number, type: FieldHighlightType): void {
+        const map = type === 'check' ? this.stateOverlays : this.selectionOverlays;
+        this.addOverlay(row, column, type, map);
+    }
+
+    /**
+    * Remove all selection-driven overlays (selected square, legal moves, capture targets).
+    */
+    clearSelectionHighlights(): void {
+        this.clearMap(this.selectionOverlays);
+    }
+
+    /**
+     * Remove the king-in-check highlight. Call this before re-evaluating
+     * check state after every move.
+     */
+    clearCheckHighlight(): void {
+        this.clearMap(this.stateOverlays);
+    }
+
+    /** Remove every overlay (selection + state). */
+    clearAllHighlights(): void {
+        this.clearSelectionHighlights();
+        this.clearCheckHighlight();
+    }
+
     init(): Body {
         this.createBoardMatrix();
-        this.createPsychicsBody();
+        this.createPhysicsBody();
         this.initChessBase();
 
         if (!this.body) {
@@ -122,8 +207,9 @@ export class ChessBoard extends BaseGroup {
     update(): void {
         // Static body — no physics sync needed
     }
-    
+
     dispose(): void {
+        this.clearAllHighlights();
         this.chessBase.dispose();
         super.dispose();
     }

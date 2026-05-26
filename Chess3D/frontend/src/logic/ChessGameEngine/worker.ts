@@ -27,8 +27,12 @@ addEventListener("message", (e: WebWorkerEvent) => {
             break;
         }
 
-        case "promote": {
-            chessAiManager.updateChessEngineWithPromotion(e.data);
+        case "aiMoveAfterPromotion": {
+            
+            chessAiManager.updateBoardFromFen(e.data.fen);
+
+            const move = chessAiManager.calcAiMove();
+            postMessage({ type: "aiMovePerformed", aiMove: move });
             break;
         }
 

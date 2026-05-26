@@ -15,6 +15,7 @@ export class ChessScene extends BasicScene {
     private boundOnMouseDown!: (event: MouseEvent) => void;
     private boundOnMouseUp!: (event: MouseEvent) => void;
     private boundOnPointerMove!: (event: MouseEvent) => void;
+    
  
     constructor(props: BasicSceneProps) {
         super(props);
@@ -98,20 +99,20 @@ export class ChessScene extends BasicScene {
         this.setupLight({
             color: "#FFFFFF",
             position: new Vector3(0, 8, -8),
-            intensity: 3,
+            intensity: 10,
             lookAt: new Vector3(0, 0, 0),
         });
         this.setupLight({
             color: "#FFFFFF",
             position: new Vector3(5, 10, 0),
-            intensity: 8,
+            intensity: 4,
             lookAt: new Vector3(0, 0, 0),
             castShadow: true,
         });
         this.setupLight({
             color: "#FFFFFF",
             position: new Vector3(0, 8, 8),
-            intensity: 3,
+            intensity: 4,
             lookAt: new Vector3(0, 0, 0),
         });
     }

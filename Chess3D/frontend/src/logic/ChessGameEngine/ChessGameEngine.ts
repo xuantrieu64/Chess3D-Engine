@@ -15,6 +15,7 @@ import { PromotablePieces } from '../PiecesContainer/types';
 import { convertThreeVector } from '@/utils/general';
 import { Piece } from '@/objects/Pieces/Piece/Piece';
 import Worker from 'web-worker';
+import { GameOverInfo } from '../GameInterface/types';
 
 export class ChessGameEngine {
     private _chessBoard: ChessBoard;
@@ -49,10 +50,6 @@ export class ChessGameEngine {
         this.worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // PRIVATE — Setup
-    // ─────────────────────────────────────────────────────────────────────
-
     private drawSide(): void {
         this.startingPlayerSide = Math.random() < 0.5 ? "w" : "b";
     }
@@ -61,9 +58,15 @@ export class ChessGameEngine {
         const chessNotation = getChessNotation(chessPosition);
         const possibleMoves = this.chessGame.moves({ square: chessNotation, verbose: true });
 
+        // Highlight the origin square of the selected piece
+        this._chessBoard.highlightField(chessPosition.row, chessPosition.column, 'selected');
+
         possibleMoves.forEach((move) => {
             const { row, column } = getMatrixPosition(move.to);
             this._chessBoard.markPlaneAsDroppable(row, column);
+
+            const isCapture = Boolean(move.captured);
+            this._chessBoard.highlightField(row, column, isCapture ? 'capture' : 'move')
         });
     }
 
@@ -79,7 +82,11 @@ export class ChessGameEngine {
 
     private notifyAiToMove(playerMove: Move): void {
         this.gameInterface.enableOpponentTurnNotification();
-        this.worker.postMessage({ type: "aiMove", playerMove });
+        this.worker.postMessage({
+            type: "aiMove",
+            playerMove,
+            fen: this.chessGame.fen() // Add FEN as safety check
+        });
     }
 
     private performPlayerMove(droppedField: Object3D): MoveResult {
@@ -93,13 +100,13 @@ export class ChessGameEngine {
         const { removedPiecesIds, move: playerMove, promotedPiece, stopAi } =
             this.performPlayerMove(droppedField);
 
+        this.updateCheckHighlight();
+
         const isGameOver = this.chessGame.isGameOver();
 
         if (isGameOver) {
-            this.onEndGameCallback(this.chessGame, this.startingPlayerSide);
-        }
-
-        if (!stopAi && !isGameOver) {
+            this.handleGameOver();
+        } else if (!stopAi) {
             this.notifyAiToMove(playerMove);
         }
 
@@ -123,15 +130,16 @@ export class ChessGameEngine {
             }
 
             const actionResult = this.performAiMove(aiMove);
-            const isGameOver = this.chessGame.isGameOver();
+            // Re-evaluate check state after every AI move
+            this.updateCheckHighlight();
 
             cb(actionResult);
 
             // FIX: DISABLE (not enable) after AI move completes
             this.gameInterface.disableOpponentTurnNotification();
 
-            if (isGameOver) {
-                this.onEndGameCallback(this.chessGame, this.startingPlayerSide);
+            if (this.chessGame.isGameOver()) {
+                this.handleGameOver();
             }
         };
     }
@@ -271,11 +279,28 @@ export class ChessGameEngine {
                     color, droppedField, piece, promotedPieceKey: promotedTo, move
                 });
                 this.onPromotionCallback(result);
-                this.notifyAiToMove(move);
+
+                // Re-evaluate check state now that the real promoted piece is on the board
+                this.updateCheckHighlight();
+
+                // ✅ FIX: Send to AI AFTER promotion complete + FEN updated
+                // Pass the CURRENT FEN (not move) to avoid state mismatch
+                this.notifyAiAfterPlayerPromotion(move, promotedTo);
             });
             return true;
         }
         return this.promotePiece({ color, droppedField, piece, promotedPieceKey: "q" });
+    }
+
+    private notifyAiAfterPlayerPromotion(move: Move, promotedTo: PromotablePieces): void {
+        this.gameInterface.enableOpponentTurnNotification();
+
+        this.worker.postMessage({
+            type: "aiMoveAfterPromotion",
+            fen: this.chessGame.fen(),
+            promotedTo: promotedTo,
+            move: move
+        });
     }
 
     private isPlayerColor(color: PieceColor): boolean {
@@ -316,19 +341,9 @@ export class ChessGameEngine {
 
     private movePieceToField(field: Object3D, piece: Piece): void {
         const { chessPosition } = field.userData;
-
         const worldPosition = new Vector3();
-
         field.getWorldPosition(worldPosition);
-
-        // KHÔNG offset ở đây nữa
-        // Piece sẽ tự xử lý offset
-
-        piece.changePosition(
-            chessPosition,
-            convertThreeVector(worldPosition),
-            true
-        );
+        piece.changePosition(chessPosition, convertThreeVector(worldPosition), true);
     }
 
     private removePieceFromWorld(piece: Piece): void {
@@ -377,9 +392,73 @@ export class ChessGameEngine {
         });
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // PUBLIC API
-    // ─────────────────────────────────────────────────────────────────────
+    /**
+     * After every move: clear the previous check highlight, then re-draw it
+     * if the current player's king is under attack.
+     *
+     * chess.js board() layout:
+     *   [r][c] where r=0 → rank 8, c=0 → a-file
+     * Our matrix:
+     *   row=0 → rank 1, col=0 → h-file
+     * Conversion: our_row = 7 - r, our_col = 7 - c
+     */
+    private updateCheckHighlight(): void {
+        this._chessBoard.clearCheckHighlight();
+
+        if (!this.chessGame.inCheck()) return;
+
+        const board = this.chessGame.board();
+        const currentTurn = this.chessGame.turn() as PieceColor;
+
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const sq = board[r][c];
+                if (sq?.type === "k" && sq.color === currentTurn) {
+                    this._chessBoard.highlightField(7 - r, 7 - c, "check");
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Build a localised GameOverInfo from the current chess.js state and
+     * push it to the UI. Called immediately when isGameOver() is true.
+     */
+    private handleGameOver(): void {
+        const info = this.buildGameOverInfo();
+        this.gameInterface.showGameOver(info);
+        this.onEndGameCallback(this.chessGame, this.startingPlayerSide);
+    }
+
+
+    private buildGameOverInfo(): GameOverInfo {
+        const game = this.chessGame;
+
+        if (game.isCheckmate()) {
+            // After checkmate, game.turn() is the side that LOST (cannot move)
+            const loserIsPlayer = game.turn() === this.startingPlayerSide;
+            return loserIsPlayer ? { headline: "You lose", detail: "Chiếu hết" } : { headline: "You win", detail: "Chiếu hết" };
+        }
+
+        if (game.isStalemate()) {
+            return { headline: "Thua cuộc", detail: "Không còn nước đi hợp lệ" };
+        }
+
+        if (game.isInsufficientMaterial()) {
+            return { headline: "Hòa cờ! 🤝", detail: "Thiếu quân để chiếu hết" };
+        }
+        // if (game.isThreefoldRepetition()) {
+        //     return { headline: "Hòa cờ! 🤝", detail: "Lặp thế 3 lần" };
+        // }
+        if (game.isDraw()) {
+            return { headline: "Hòa cờ! 🤝", detail: "Quy tắc 50 nước không ăn" };
+        }
+        return { headline: "Ván cờ kết thúc", detail: "" };
+    }
+
+
+
 
     get chessBoard(): ChessBoard {
         return this._chessBoard;
@@ -408,6 +487,7 @@ export class ChessGameEngine {
         }
 
         this._chessBoard.clearMarkedPlanes();
+        this._chessBoard.clearSelectionHighlights(); //delete highlight when selected piece
 
         if (this.selected) {
             this.addPieceToWorld(this.selected);
@@ -420,6 +500,7 @@ export class ChessGameEngine {
     cancelSelection(): void {
         this.resetSelectedPiecePosition();
         this._chessBoard.clearMarkedPlanes();
+        this._chessBoard.clearSelectionHighlights();
         if (this.selected) this.addPieceToWorld(this.selected);
         this.setSelectedPiece(null);
     }

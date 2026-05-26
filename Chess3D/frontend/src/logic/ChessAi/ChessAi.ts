@@ -1,6 +1,6 @@
 import { PieceSquareTables, SquareTableKeys } from "@/contants/types";
 import { PieceChessPosition, PieceColor } from "@/objects/Pieces/Piece/types";
-import { ChessInstance, PromotionWebWorkerEvent } from "../ChessGameEngine/types";
+import { ChessInstance } from "../ChessGameEngine/types";
 import { Chess, Move } from "chess.js";
 import { cloneDeep } from "lodash";
 import { PIECE_SQUARE_TABLES, PIECE_WEIGHTS } from "@/contants/chess-weights";
@@ -122,56 +122,47 @@ export class ChessAi {
             }
         }
 
-        // 2. Tính điểm vị trí di chuyển và phong cấp
         if (isPromotionFlag(flags)) {
-            const promoted = "q"; // Mặc định phong cấp thành Hậu
+
+            const promoted = (move.promotion || "q") as SquareTableKeys;
 
             if (this.isAiColor(moveColor)) {
-                // Trừ điểm con Tốt ở vị trí cũ
-                newSum -= PIECE_WEIGHTS[movedPiece] +
-                    this.getAiValueFromSquareTable(movedPiece, {
+
+                newSum -= PIECE_WEIGHTS[movedPiece] + this.getAiValueFromSquareTable(movedPiece,
+                    {
                         row: fromRow,
                         column: fromColumn,
-                    });
-                // Cộng điểm con Hậu ở vị trí MỚI (toRow, toColumn)
+                    }
+                );
+
                 newSum += PIECE_WEIGHTS[promoted] +
-                    this.getAiValueFromSquareTable(promoted, {
-                        row: toRow,
-                        column: toColumn,
-                    });
-            } else { // Đối thủ phong cấp
+                    this.getAiValueFromSquareTable(
+                        promoted,
+                        {
+                            row: toRow,
+                            column: toColumn,
+                        }
+                    );
+
+            } else {
+
                 newSum += PIECE_WEIGHTS[movedPiece] +
-                    this.getOpponentValueFromSquareTable(movedPiece, {
-                        row: fromRow,
-                        column: fromColumn,
-                    });
+                    this.getOpponentValueFromSquareTable(
+                        movedPiece,
+                        {
+                            row: fromRow,
+                            column: fromColumn,
+                        }
+                    );
+
                 newSum -= PIECE_WEIGHTS[promoted] +
-                    this.getOpponentValueFromSquareTable(promoted, { // Sửa từ movedPiece thành promoted
-                        row: toRow,
-                        column: toColumn,
-                    });
-            }
-        } else {
-            // Di chuyển bình thường
-            if (this.isAiColor(moveColor)) {
-                newSum -= this.getAiValueFromSquareTable(movedPiece, {
-                    row: fromRow,
-                    column: fromColumn,
-                });
-                newSum += this.getAiValueFromSquareTable(movedPiece, {
-                    row: toRow,
-                    column: toColumn,
-                });
-            } else { // Đối thủ di chuyển
-                // BUG CŨ: Bạn dùng getAiValueFromSquareTable cho đối thủ. Đã sửa thành Opponent:
-                newSum += this.getOpponentValueFromSquareTable(movedPiece, {
-                    row: fromRow,
-                    column: fromColumn,
-                });
-                newSum -= this.getOpponentValueFromSquareTable(movedPiece, {
-                    row: toRow,
-                    column: toColumn,
-                });
+                    this.getOpponentValueFromSquareTable(
+                        promoted,
+                        {
+                            row: toRow,
+                            column: toColumn,
+                        }
+                    );
             }
         }
 
@@ -223,21 +214,21 @@ export class ChessAi {
     }
 
     updateBoardWithPlayerMove(move: Move): void {
-        this.chessGame.move(move);
-        this.prevSum = this.evaluateBoard(move, this.prevSum);
-    }
 
-    updateChessEngineWithPromotion(payload: PromotionWebWorkerEvent): void {
-        const { move, chessNotationPos, pieceType, color } = payload;
+        try {
 
-        if (move) {
-            this.chessGame.move(move);
+            const result = this.chessGame.move(move);
+
+            if (!result) {
+                console.warn("[ChessAI] Invalid player move", move);
+                return;
+            }
+
+            this.prevSum = this.evaluateBoard(result, this.prevSum);
+
+        } catch (error) {
+            console.error("[ChessAI] Failed to apply player move:", move, error);
         }
-
-        this.chessGame.remove(chessNotationPos);
-        this.chessGame.put({ type: pieceType, color }, chessNotationPos);
-
-        this.chessGame.load(this.chessGame.fen());
     }
 
     calcAiMove(): Move | null {
@@ -257,5 +248,9 @@ export class ChessAi {
         this.chessGame.move(move);
 
         return move;
+    }
+
+    public updateBoardFromFen(fen: string): void {
+        this.chessGame.load(fen);
     }
 }
