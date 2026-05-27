@@ -46,21 +46,18 @@ export class ChessAi {
         alpha: number,
         beta: number
     ): [Move | null, number] {
-        // 1. Điều kiện dừng
+        let maxVal = -Infinity;
+        let bestMove: Move | null = null;
+        let minVal = +Infinity;
+        let currentMove: Move;
         const moves = this.chessGame.moves();
-        // Sửa dòng này trong hàm minimax
-        if (depth <= 0 || moves.length === 0 || this.chessGame.isGameOver()) {
+
+        if (depth === 0 || moves.length === 0) {
             return [null, sum];
         }
 
-        let bestMove: Move | null = null;
-        let bestVal = isMaximizingPlayer ? -Infinity : Infinity;
-
         for (const moveNotation of moves) {
-            // 2. Thực hiện nước đi và kiểm tra null
-            const currentMove = this.chessGame.move(moveNotation);
-            if (!currentMove) continue; // Bỏ qua nếu nước đi lỗi
-
+            currentMove = this.chessGame.move(moveNotation);
             const newSum = this.evaluateBoard(currentMove, sum);
             const [, childValue] = this.minimax(
                 depth - 1,
@@ -70,28 +67,36 @@ export class ChessAi {
                 beta
             );
 
-            // 3. Undo an toàn
             this.chessGame.undo();
 
-            // 4. Cập nhật Alpha-Beta
             if (isMaximizingPlayer) {
-                if (childValue > bestVal) {
-                    bestVal = childValue;
+                if (childValue > maxVal) {
+                    maxVal = childValue;
                     bestMove = currentMove;
                 }
-                alpha = Math.max(alpha, bestVal);
-            } else {
-                if (childValue < bestVal) {
-                    bestVal = childValue;
-                    bestMove = currentMove;
-                }
-                beta = Math.min(beta, bestVal);
-            }
 
-            if (beta <= alpha) break;
+                alpha = Math.max(alpha, childValue);
+                if (beta <= alpha) {
+                    break;
+                }
+            } else {
+                if (childValue < minVal) {
+                    minVal = childValue;
+                    bestMove = currentMove;
+                }
+                beta = Math.min(childValue, beta);
+
+                if (beta <= alpha) {
+                    break;
+                }
+            }
         }
 
-        return [bestMove, bestVal];
+        if (isMaximizingPlayer) {
+            return [bestMove, maxVal];
+        }
+
+        return [bestMove, minVal];
     }
 
     private evaluateBoard(move: Move, prevSum: number): number {

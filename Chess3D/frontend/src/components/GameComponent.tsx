@@ -34,7 +34,7 @@ const GameComponent = () => {
                 className="block w-full h-full outline-none"
             />
             <div className="absolute top-4 left-4 text-white z-10 pointer-events-none select-none">
-                <h1 className="text-xl font-bold tracking-wide">Chess 3D</h1>
+                <h1 className="tracking-wide">Click 2 lần vào quân cờ để duy chuyển</h1>
             </div>
         </div>
     )

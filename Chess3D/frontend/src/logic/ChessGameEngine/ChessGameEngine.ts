@@ -446,7 +446,7 @@ export class ChessGameEngine {
         }
 
         if (game.isInsufficientMaterial()) {
-            return { headline: "Hòa cờ! 🤝", detail: "Thiếu quân để chiếu hết" };
+            return { headline: "Hòa cờ! 🤝", detail: "" };
         }
         // if (game.isThreefoldRepetition()) {
         //     return { headline: "Hòa cờ! 🤝", detail: "Lặp thế 3 lần" };
