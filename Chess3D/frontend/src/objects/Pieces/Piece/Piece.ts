@@ -4,7 +4,6 @@ import { Body, Box, Quaternion, Vec3 } from "cannon-es";
 import { PieceChessPosition, PieceColor, PieceOptions } from "./types";
 import { Color, Mesh, MeshPhongMaterial, Vector3 } from "three";
 import { BLACK_COLOR_PIECE, WHITE_COLOR_PIECE } from "@/contants/colors";
-// import { convertCannonEsQuaternion } from "@/utils/general";
 
 export abstract class Piece extends BaseObject {
     private readonly initialMass = 0.1;
@@ -58,7 +57,6 @@ export abstract class Piece extends BaseObject {
         this.body.angularDamping = 0.99;
     }
 
-
     get chessPosition(): PieceChessPosition {
         return this._chessPosition;
     }
@@ -101,7 +99,6 @@ export abstract class Piece extends BaseObject {
         this.body.wakeUp()
     }
 
-
     changeWorldPosition(x: number, y: number, z: number): void {
         if (!this.body) return;
         this.body.position.set(x, y, z);
@@ -110,16 +107,29 @@ export abstract class Piece extends BaseObject {
         this.body.wakeUp();
     }
 
-    init(initialPosition: Vector3, loader: GLTFLoader): Body {
-        this.initModel(loader)
-            .then(() => this.changeMaterial())
-            .catch((err) => console.error(`[Piece] GLTF load failed for ${this.name}:`, err));
-
+    /**
+     * Step 1: Create physics body ONLY (sync operation)
+     * Model loading happens separately in loadModel()
+     */
+    init(initialPosition: Vector3): Body {
         this.createPhysicsBody(initialPosition);
-
         this.scale.set(1, 1, 1);
 
         return this.body!;
+    }
+
+    /**
+     * Step 2: Load model asynchronously (separate from init)
+     * This allows parallel loading of all 32 pieces
+     */
+    async loadModel(loader: GLTFLoader): Promise<void> {
+        try {
+            await this.initModel(loader);
+            this.changeMaterial();
+        } catch (err) {
+            console.error(`[Piece] GLTF load failed for ${this.name}:`, err);
+            throw err;
+        }
     }
 
     removeMass(): void {

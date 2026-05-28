@@ -16,7 +16,6 @@ export class ChessScene extends BasicScene {
     private boundOnMouseUp!: (event: MouseEvent) => void;
     private boundOnPointerMove!: (event: MouseEvent) => void;
 
-
     constructor(props: BasicSceneProps) {
         super(props);
         this.chessGameEngine = new ChessGameEngine(this.world, this.loader);
@@ -123,22 +122,31 @@ export class ChessScene extends BasicScene {
         });
     }
 
-    private setupScene(): void {
-        // Step 1: Init board geometry and physics body
-        this.chessGameEngine.initBoard();
-
-        // Step 2: Add board to scene FIRST so getWorldPosition() works for pieces
+    /**
+     * ✅ REFACTORED: setupScene() is now async and awaits model loading
+     * 
+     * Flow:
+     * 1. Init board geometry + physics
+     * 2. Add board to scene (so getWorldPosition() works)
+     * 3. Create 32 pieces + add physics bodies (SYNC)
+     * 4. Add all pieces to scene (SYNC)
+     * 5. Load all 32 piece models in parallel (ASYNC - await)
+     * 6. Add all pieces Object3D to scene (already done in step 4)
+     */
+    private async setupScene(): Promise<void> {
+        await this.chessGameEngine.initBoard();
         this.add(this.chessGameEngine.chessBoard);
-
-        // Step 3: Now spawn pieces — each calls getWorldPosition() on a board field
-        // which is now correctly in the scene graph → returns real world coordinates
         this.chessGameEngine.initPieces();
-
-        // Step 4: Add each piece Object3D to the scene
         const pieces = this.chessGameEngine.getAllPieces();
         pieces.forEach((piece: Piece) => {
             this.add(piece);
         });
+        try {
+            await this.chessGameEngine.initModels();
+        } catch (err) {
+            console.error("[ChessScene] ✗ Failed to load models:", err);
+            throw err;
+        }
     }
 
     private setCameraPosition(playerStartingSide: PieceColor): void {
@@ -164,7 +172,11 @@ export class ChessScene extends BasicScene {
         });
     }
 
-    init(): void {
+    /**
+     * ✅ REFACTORED: init() is now async
+     * Awaits setupScene() before starting the game
+     */
+    async init(): Promise<void> {
         this.camera.position.set(0, 11, 8);
         this.camera.lookAt(0, 0, 0);
         this.orbitals.target.set(0, 0, 0);
@@ -173,16 +185,23 @@ export class ChessScene extends BasicScene {
         this.setupLights();
         this.setupRaycaster();
 
-        // setupScene() handles init order correctly (board before pieces)
-        this.setupScene();
+        const playerSide = this.chessGameEngine.prepareSide();
+        this.setCameraPosition(playerSide);
 
-        // Start game: assign sides, init AI worker, set camera
+        try {
+            await this.setupScene();
+        } catch (err) {
+            console.error("[ChessScene] Scene setup failed:", err);
+            throw err;
+        }
+
+        // Start game only AFTER models are loaded
         this.startGame();
     }
 
     private startGame(): void {
         this.orbitals.autoRotate = false;
-        const playerStartingSide = this.chessGameEngine.start(
+        this.chessGameEngine.start(
             (actionResult: ActionResult) => {
                 this.onActionPerformed(actionResult);
             },
@@ -196,7 +215,6 @@ export class ChessScene extends BasicScene {
                 });
             }
         );
-        this.setCameraPosition(playerStartingSide);
     }
 
     update(): void {
