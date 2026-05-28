@@ -154,7 +154,7 @@ export class PiecesContainer {
      */
     private setupPiecePosition(piece: Piece, chessPosition: PieceChessPosition): void {
         const initialPosition = this.getFieldPosition(chessPosition);
-        const body = piece.init(initialPosition, this.loader);
+        const body = piece.init(initialPosition);
         this.world.addBody(body);
     }
  
@@ -204,6 +204,10 @@ export class PiecesContainer {
         return promotedPiece;
     }
  
+    /**
+     * Step 1: Create all 32 pieces and add physics bodies to world (SYNC)
+     * Models are loaded separately in initModelsParallel()
+     */
     initPieces(): void {
         this.pieces = {
             b: {
@@ -224,6 +228,31 @@ export class PiecesContainer {
             },
         };
     }
+
+    /**
+     * Step 2: Load all 32 piece models in parallel (ASYNC)
+     * This is called AFTER initPieces() and board is in scene
+     */
+    async initModelsParallel(): Promise<void> {
+        const allPieces = this.getAllPieces();
+        
+        // ✅ KEY: Promise.all() loads all models concurrently
+        const loadPromises = allPieces.map(piece => 
+            piece.loadModel(this.loader)
+                .catch(err => {
+                    console.error(`[PiecesContainer] Failed to load model for ${piece.name}:`, err);
+                    // Re-throw so Promise.all catches it
+                    throw err;
+                })
+        );
+
+        try {
+            await Promise.all(loadPromises);
+        } catch (err) {
+            console.error("[PiecesContainer] ✗ Error loading piece models:", err);
+            throw err;
+        }
+    }
  
     getPiece(color: PieceColor, type: keyof PieceSet, chessPosition: PieceChessPosition): Piece | undefined {
         const { row, column } = chessPosition;
@@ -237,6 +266,7 @@ export class PiecesContainer {
     }
  
     update(): void {
+        if (!this.pieces) return;
         for (const color of ["w", "b"] as PieceColor[]) {
             for (const pieceArr of Object.values(this.pieces[color])) {
                 for (const piece of pieceArr) {

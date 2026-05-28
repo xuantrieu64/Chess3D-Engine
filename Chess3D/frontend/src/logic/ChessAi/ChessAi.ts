@@ -252,5 +252,6 @@ export class ChessAi {
 
     public updateBoardFromFen(fen: string): void {
         this.chessGame.load(fen);
+        this.prevSum = 0;
     }
 }

@@ -85,7 +85,7 @@ export class ChessGameEngine {
         this.worker.postMessage({
             type: "aiMove",
             playerMove,
-            fen: this.chessGame.fen() // Add FEN as safety check
+            fen: this.chessGame.fen()
         });
     }
 
@@ -280,19 +280,26 @@ export class ChessGameEngine {
                 });
                 this.onPromotionCallback(result);
 
-                // Re-evaluate check state now that the real promoted piece is on the board
                 this.updateCheckHighlight();
 
-                // ✅ FIX: Send to AI AFTER promotion complete + FEN updated
-                // Pass the CURRENT FEN (not move) to avoid state mismatch
+                if (this.chessGame.isGameOver()) {
+                    this.handleGameOver();
+                    this.gameInterface.disableOpponentTurnNotification();
+                    return;
+                }
+
                 this.notifyAiAfterPlayerPromotion(move, promotedTo);
             });
             return true;
         }
-        return this.promotePiece({ color, droppedField, piece, promotedPieceKey: "q" });
+
+        // ✅ Truyền move cho AI promotion
+        return this.promotePiece({ color, droppedField, piece, promotedPieceKey: "q", move });
     }
 
     private notifyAiAfterPlayerPromotion(move: Move, promotedTo: PromotablePieces): void {
+        // ✅ Clean state trước enable
+        this.gameInterface.disableOpponentTurnNotification();
         this.gameInterface.enableOpponentTurnNotification();
 
         this.worker.postMessage({
@@ -395,12 +402,6 @@ export class ChessGameEngine {
     /**
      * After every move: clear the previous check highlight, then re-draw it
      * if the current player's king is under attack.
-     *
-     * chess.js board() layout:
-     *   [r][c] where r=0 → rank 8, c=0 → a-file
-     * Our matrix:
-     *   row=0 → rank 1, col=0 → h-file
-     * Conversion: our_row = 7 - r, our_col = 7 - c
      */
     private updateCheckHighlight(): void {
         this._chessBoard.clearCheckHighlight();
@@ -431,12 +432,10 @@ export class ChessGameEngine {
         this.onEndGameCallback(this.chessGame, this.startingPlayerSide);
     }
 
-
     private buildGameOverInfo(): GameOverInfo {
         const game = this.chessGame;
 
         if (game.isCheckmate()) {
-            // After checkmate, game.turn() is the side that LOST (cannot move)
             const loserIsPlayer = game.turn() === this.startingPlayerSide;
             return loserIsPlayer ? { headline: "You lose", detail: "Chiếu hết" } : { headline: "You win", detail: "Chiếu hết" };
         }
@@ -448,17 +447,12 @@ export class ChessGameEngine {
         if (game.isInsufficientMaterial()) {
             return { headline: "Hòa cờ! 🤝", detail: "" };
         }
-        // if (game.isThreefoldRepetition()) {
-        //     return { headline: "Hòa cờ! 🤝", detail: "Lặp thế 3 lần" };
-        // }
+
         if (game.isDraw()) {
             return { headline: "Hòa cờ! 🤝", detail: "Quy tắc 50 nước không ăn" };
         }
         return { headline: "Ván cờ kết thúc", detail: "" };
     }
-
-
-
 
     get chessBoard(): ChessBoard {
         return this._chessBoard;
@@ -487,7 +481,7 @@ export class ChessGameEngine {
         }
 
         this._chessBoard.clearMarkedPlanes();
-        this._chessBoard.clearSelectionHighlights(); //delete highlight when selected piece
+        this._chessBoard.clearSelectionHighlights();
 
         if (this.selected) {
             this.addPieceToWorld(this.selected);
@@ -515,24 +509,33 @@ export class ChessGameEngine {
 
     moveSelectedPiece(x: number, z: number): void {
         if (!this.selected) return;
-        // Lift piece 0.8 units above board during drag
         this.selected.changeWorldPosition(x, 0.8, z);
     }
 
-    /**
-     * BUG FIX: Split old init() into initBoard() + initPieces()
-     * so ChessScene can add board to scene between the two calls.
-     */
-
-    /** Step 1: Create board geometry and physics body */
-    initBoard(): void {
-        const boardBody = this._chessBoard.init();
-        this.world.addBody(boardBody);
+    /** Step 1: Create board geometry and physics body (ASYNC) */
+    initBoard(): Promise<void> {
+        return this._chessBoard.init().then(boardBody => {
+            this.world.addBody(boardBody);
+        });
     }
 
     /** Step 2: Spawn all 32 pieces (call AFTER board is added to scene) */
     initPieces(): void {
         this.piecesContainer.initPieces();
+    }
+
+    /**
+     * Step 3: Load all piece models in parallel (ASYNC)
+     * Call AFTER board and pieces are in scene
+     */
+    async initModels(): Promise<void> {
+        await this.piecesContainer.initModelsParallel();
+    }
+
+
+    prepareSide(): PieceColor {
+        this.drawSide();
+        return this.startingPlayerSide;
     }
 
     start(
@@ -543,13 +546,14 @@ export class ChessGameEngine {
         this.onEndGameCallback = onEndGame;
         this.onPromotionCallback = onPromotion;
 
-        this.drawSide();
+        // this.drawSide();
         this.gameInterface.init(this.startingPlayerSide);
         this.addWebWorkerListener(aiMoveCallback);
         this.initChessAi();
 
         return this.startingPlayerSide;
     }
+
 
     updatePhysics(): void {
         this.world.fixedStep();

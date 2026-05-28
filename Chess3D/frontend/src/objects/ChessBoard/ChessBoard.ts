@@ -8,9 +8,7 @@ import { Body, Box, Vec3 } from "cannon-es";
 import { FieldHighlightType, HIGHLIGHT_STYLES } from "./types";
 import { HIGHLIGHT_Y_OFFSET } from "@/contants/highlight";
 
-
 export const FIELD_NAME = "Field";
-
 
 export class ChessBoard extends BaseGroup {
     private readonly size = 8;
@@ -71,14 +69,21 @@ export class ChessBoard extends BaseGroup {
         this.body.position.set(0, -0.05, 0);
     }
 
-    //create board 8x8
-    private initChessBase(): void {
-        this.chessBase.initModel(this.loader).then((model) => {
+    /**
+     * ✅ REFACTORED: initChessBase() now returns a Promise
+     * This ensures we wait for the base model to load before considering init complete
+     */
+    private async initChessBase(): Promise<void> {
+        try {
+            const model = await this.chessBase.initModel(this.loader);
             const base = model.scene;
             base.position.set(0, 0, 0);
             base.scale.set(16.5, 16, 16.5);
             this.add(base);
-        });
+        } catch (err) {
+            console.error("[ChessBoard] Failed to load base model:", err);
+            throw err;
+        }
     }
 
     private static overlayKey(row: number, column: number): string {
@@ -131,7 +136,6 @@ export class ChessBoard extends BaseGroup {
         map.clear();
     }
 
-
     getFieldId(row: number, column: number): number {
         if (!this.boardMatrix[row]) return -1;
         return this.boardMatrix[row][column];
@@ -146,7 +150,6 @@ export class ChessBoard extends BaseGroup {
     markPlaneAsDroppable(row: number, column: number): void {
         const plane = this.getField(row, column) as Mesh | undefined;
         if (plane) plane.userData.droppable = true;
-        // Visual highlight can be added here
     }
 
     clearMarkedPlanes(): void {
@@ -161,19 +164,19 @@ export class ChessBoard extends BaseGroup {
     }
 
     /**
-    * Highlight a board field with the given visual type.
-    *
-    * 'check' type uses a separate persistent overlay map so it survives
-    * across piece selection / deselection cycles.
-    */
+     * Highlight a board field with the given visual type.
+     *
+     * 'check' type uses a separate persistent overlay map so it survives
+     * across piece selection / deselection cycles.
+     */
     highlightField(row: number, column: number, type: FieldHighlightType): void {
         const map = type === 'check' ? this.stateOverlays : this.selectionOverlays;
         this.addOverlay(row, column, type, map);
     }
 
     /**
-    * Remove all selection-driven overlays (selected square, legal moves, capture targets).
-    */
+     * Remove all selection-driven overlays (selected square, legal moves, capture targets).
+     */
     clearSelectionHighlights(): void {
         this.clearMap(this.selectionOverlays);
     }
@@ -192,10 +195,15 @@ export class ChessBoard extends BaseGroup {
         this.clearCheckHighlight();
     }
 
-    init(): Body {
+    /**
+     * ✅ REFACTORED: init() now awaits base model loading
+     */
+    async init(): Promise<Body> {
         this.createBoardMatrix();
         this.createPhysicsBody();
-        this.initChessBase();
+        
+        // ✅ AWAIT: Load base model asynchronously
+        await this.initChessBase();
 
         if (!this.body) {
             throw new Error("Physics body was not created");
