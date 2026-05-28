@@ -89,21 +89,20 @@ export class ChessGameEngine {
         });
     }
 
-    private performPlayerMove(droppedField: Object3D): MoveResult {
+    private async performPlayerMove(droppedField: Object3D): Promise<MoveResult> {
         if (!this.selected) {
             throw new Error("[ChessGameEngine] No piece selected");
         }
-        return this.handlePieceMove(droppedField, this.selected);
+        return await this.handlePieceMove(droppedField, this.selected);
     }
 
-    private dropPiece(droppedField: Object3D): ActionResult {
+    private async dropPiece(droppedField: Object3D): Promise<ActionResult> {
         const { removedPiecesIds, move: playerMove, promotedPiece, stopAi } =
-            this.performPlayerMove(droppedField);
+            await this.performPlayerMove(droppedField);
 
         this.updateCheckHighlight();
 
         const isGameOver = this.chessGame.isGameOver();
-
         if (isGameOver) {
             this.handleGameOver();
         } else if (!stopAi) {
@@ -119,7 +118,7 @@ export class ChessGameEngine {
      * Fix: call disableOpponentTurnNotification() when AI move is done.
      */
     private createWebWorkerCallback(cb: AiMoveCallback): void {
-        this.webWorkerCallback = (e: WebWorkerEvent) => {
+        this.webWorkerCallback = async (e: WebWorkerEvent) => {
             if (e.data.type !== "aiMovePerformed") return;
 
             const aiMove = (e.data as { type: "aiMovePerformed"; aiMove: Move | null }).aiMove;
@@ -129,13 +128,14 @@ export class ChessGameEngine {
                 return;
             }
 
-            const actionResult = this.performAiMove(aiMove);
+            // ✅ await vì performAiMove là async
+            const actionResult = await this.performAiMove(aiMove);
+
             // Re-evaluate check state after every AI move
             this.updateCheckHighlight();
 
             cb(actionResult);
 
-            // FIX: DISABLE (not enable) after AI move completes
             this.gameInterface.disableOpponentTurnNotification();
 
             if (this.chessGame.isGameOver()) {
@@ -144,7 +144,7 @@ export class ChessGameEngine {
         };
     }
 
-    private performAiMove(move: Move): ActionResult {
+    private async performAiMove(move: Move): Promise<ActionResult> {
         const { from, to, color, piece } = move;
         const fromPos = getMatrixPosition(from);
         const toPos = getMatrixPosition(to);
@@ -157,17 +157,17 @@ export class ChessGameEngine {
             return { removedPiecesIds: [] };
         }
 
-        return this.moveAiPiece(toField, movedPiece);
+        return await this.moveAiPiece(toField, movedPiece);
     }
 
-    private moveAiPiece(toField: Object3D, movedPiece: Piece): ActionResult {
+    private async moveAiPiece(toField: Object3D, movedPiece: Piece): Promise<ActionResult> {
         movedPiece.removeMass();
-        const actionResult = this.handlePieceMove(toField, movedPiece);
+        const actionResult = await this.handlePieceMove(toField, movedPiece);
         movedPiece.resetMass();
         return actionResult;
     }
 
-    private handlePieceMove(field: Object3D, piece: Piece): MoveResult {
+    private async handlePieceMove(field: Object3D, piece: Piece): Promise<MoveResult> {
         const { chessPosition: toPosition } = field.userData;
         const { chessPosition: fromPosition } = piece;
         const removedPiecesIds: number[] = [];
@@ -187,7 +187,8 @@ export class ChessGameEngine {
             if (capturedId !== undefined) removedPiecesIds.push(capturedId);
         }
 
-        const result = this.handleFlags(move, field, piece);
+        // ✅ await handleFlags vì promotion là async
+        const result = await this.handleFlags(move, field, piece);
 
         if (this.isPieceIdToRemove(result)) {
             removedPiecesIds.push(result);
@@ -218,18 +219,18 @@ export class ChessGameEngine {
         return typeof id === "number";
     }
 
-    private handleFlags(
+    private async handleFlags(
         move: Move,
         droppedField: Object3D,
         piece: Piece
-    ): number | boolean | PromotionResult {
+    ): Promise<number | boolean | PromotionResult> {
         const { flags, color } = move;
         if (flags === "q" || flags === "k") {
             this.handleCastling(color, flags);
             return false;
         }
         if (flags === "e") return this.handleEnPassante(color, droppedField);
-        if (flags.includes("p")) return this.handlePromotion(color, droppedField, piece, move);
+        if (flags.includes("p")) return await this.handlePromotion(color, droppedField, piece, move);
         return false;
     }
 
@@ -267,15 +268,15 @@ export class ChessGameEngine {
         return removedId;
     }
 
-    private handlePromotion(
+    private async handlePromotion(
         color: PieceColor,
         droppedField: Object3D,
         piece: Piece,
         move: Move
-    ): PromotionResult | boolean {
+    ): Promise<PromotionResult | boolean> {
         if (this.isPlayerColor(color)) {
-            this.gameInterface.enablePromotionButtons(color, (promotedTo: PromotablePieces) => {
-                const result = this.promotePiece({
+            this.gameInterface.enablePromotionButtons(color, async (promotedTo: PromotablePieces) => {
+                const result = await this.promotePiece({
                     color, droppedField, piece, promotedPieceKey: promotedTo, move
                 });
                 this.onPromotionCallback(result);
@@ -293,8 +294,10 @@ export class ChessGameEngine {
             return true;
         }
 
-        // ✅ Truyền move cho AI promotion
-        return this.promotePiece({ color, droppedField, piece, promotedPieceKey: "q", move });
+        // ✅ AI promotion — await model load
+        return await this.promotePiece({
+            color, droppedField, piece, promotedPieceKey: "q", move
+        });
     }
 
     private notifyAiAfterPlayerPromotion(move: Move, promotedTo: PromotablePieces): void {
@@ -314,7 +317,7 @@ export class ChessGameEngine {
         return color === this.startingPlayerSide;
     }
 
-    private promotePiece(payload: PromotionPayload): PromotionResult {
+    private async promotePiece(payload: PromotionPayload): Promise<PromotionResult> {
         const { piece, droppedField, color, promotedPieceKey, move } = payload;
         if (!move) throw new Error("[ChessGameEngine] Promotion missing move data");
 
@@ -327,7 +330,7 @@ export class ChessGameEngine {
             throw new Error("[ChessGameEngine] Promotion: pawn not found");
         }
 
-        const promotedPiece = this.piecesContainer.addPromotedPiece(color, promotedPieceKey, fieldPosition);
+        const promotedPiece = await this.piecesContainer.addPromotedPiece(color, promotedPieceKey, fieldPosition);
         this.updateChessEngineWithPromotion(color, promotedPieceKey, notation);
         this.updateAiWithPromotion(color, promotedPieceKey, notation, move);
 
@@ -470,14 +473,14 @@ export class ChessGameEngine {
         this.setSelectedPiece(piece);
     }
 
-    deselect(intersectedField: Object3D): ActionResult | undefined {
+    async deselect(intersectedField: Object3D): Promise<ActionResult | undefined> {
         const { droppable } = intersectedField.userData;
         let actionResult: ActionResult | undefined;
 
         if (!droppable) {
             this.resetSelectedPiecePosition();
         } else {
-            actionResult = this.dropPiece(intersectedField);
+            actionResult = await this.dropPiece(intersectedField);
         }
 
         this._chessBoard.clearMarkedPlanes();

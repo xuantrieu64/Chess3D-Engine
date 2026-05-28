@@ -192,7 +192,7 @@ export class PiecesContainer {
         return removed.id;
     }
  
-    addPromotedPiece(color: PieceColor, type: PromotablePieces, chessPosition: PieceChessPosition): Piece {
+    async addPromotedPiece(color: PieceColor, type: PromotablePieces, chessPosition: PieceChessPosition): Promise<Piece> {
         let promotedPiece: Piece;
         switch (type) {
             case "q": promotedPiece = this.createQueen(color, chessPosition, true); break;
@@ -200,6 +200,8 @@ export class PiecesContainer {
             case "b": promotedPiece = this.createBishop(color, chessPosition, true); break;
             case "r": promotedPiece = this.createRook(color, chessPosition, true); break;
         }
+        await promotedPiece.loadModel(this.loader);
+
         this.pieces[color][type].push(promotedPiece);
         return promotedPiece;
     }
