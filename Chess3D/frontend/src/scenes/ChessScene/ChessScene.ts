@@ -62,7 +62,7 @@ export class ChessScene extends BasicScene {
         this.chessGameEngine.select(lastParent);
     }
 
-    private onMouseUp = (): void => {
+    private onMouseUp = async (): Promise<void> => {
         if (!this.chessGameEngine.isAnySelected()) return;
 
         this.raycaster.setFromCamera(this.clickPointer, this.camera);
@@ -74,7 +74,8 @@ export class ChessScene extends BasicScene {
             return;
         }
 
-        const actionResult = this.chessGameEngine.deselect(item.object);
+        // ✅ await để model load xong trước khi add vào scene
+        const actionResult = await this.chessGameEngine.deselect(item.object);
         if (!actionResult) return;
 
         this.onActionPerformed(actionResult);
